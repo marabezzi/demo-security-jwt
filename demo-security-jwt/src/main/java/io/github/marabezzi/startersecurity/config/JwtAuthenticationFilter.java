@@ -3,6 +3,11 @@ package io.github.marabezzi.startersecurity.config;
 import java.io.IOException;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import jakarta.servlet.FilterChain;
@@ -16,14 +21,15 @@ import lombok.RequiredArgsConstructor;
 @Configuration
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter{
-	
+
 	private final JwtService jwtService;
-	
+	private final UserDetailsService userDetailsService;
+
 	@Override
 	protected void doFilterInternal(
 			@NonNull	HttpServletRequest request,
 			@NonNull	HttpServletResponse response,
-			@NonNull	FilterChain filterChain) 
+			@NonNull	FilterChain filterChain)
 			throws ServletException, IOException {
 
 		final String authHeader = request.getHeader("Authorization");
@@ -34,7 +40,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter{
 			return;
 		}
 		jwt = authHeader.substring(7);
-		userEmail = jwtService.extracUserName(jwt)
- }
-
+		userEmail = jwtService.extractUsername(jwt);
+		if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+			UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+		 if (jwtService.isTokenValid(jwt, userDetails)) {
+			 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+					 userDetails,
+					 null,
+					 userDetails.getAuthorities()
+			);
+			 authToken.setDetails(
+					 new WebAuthenticationDetailsSource().buildDetails(request)
+		    );
+			 SecurityContextHolder.getContext().setAuthentication(authToken); 
+		 }
+		}
+		filterChain.doFilter(request, response);
+       }
 }
